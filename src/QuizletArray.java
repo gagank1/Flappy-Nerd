@@ -73,13 +73,13 @@ public class QuizletArray {						//TermText is before every q and a
 		printSetData();
 		String[][] lel = new String[setData.length][3];
 		for(int i = 0; i < setData.length; i++){
-			for(int j = 0; j < setData[i].length; j++){
+			for(int j = 0; j < setData[i].length; j++){ // copy questions and answers into first two column
 				lel[i][j] = setData[i][j];
 			}
 			int temp = (int)(setData.length*Math.random());
 			while(lel[temp][1]==lel[i][1])
 				temp = (int)(setData.length*Math.random());
-			lel[i][2] =  setData[temp][1];
+			lel[i][2] =  setData[temp][1]; // find random answer for wrong answer for third column
 		}
 		return lel;}catch(Exception e){
 			return null;

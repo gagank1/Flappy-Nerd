@@ -4,6 +4,7 @@ import javax.swing.event.*;
 
 import java.awt.*;
 import java.awt.event.*;
+import java.util.Random;
 import java.util.Scanner;
 import java.io.*;
 import java.net.MalformedURLException;
@@ -13,6 +14,12 @@ import java.awt.geom.*;
 public class FlappyNerd extends JFrame {
 	private String actualasdfingurl = null;
 	String quizletUrl;
+
+	public static void main(String[] args) {
+		new FlappyNerd("quizletUrl");
+	}
+
+
 	public FlappyNerd(String quizletUrl) {
 		this.quizletUrl = quizletUrl;
 		setLayout(null);
@@ -78,7 +85,7 @@ public class FlappyNerd extends JFrame {
 			}
 		});
 
-		String[][] expressions = QuizletArray.getShit(quizletUrl);
+		String[][] expressions = getNumShit();
 
 		Rectangle[] wrongRects = new Rectangle[100];
 		Rectangle[] rightRects = new Rectangle[100];
@@ -118,6 +125,30 @@ public class FlappyNerd extends JFrame {
 				repaint(0, 200, 1900, 400);
 			}
 		});
+
+		private String[][] getNumShit() {
+			// index 0: question
+			// index 1: correct answer
+			// index 2: wrong answer
+
+			String[][] shit = new String[20][3];
+			Random rand = new Random();
+			for (int i=0; i<20; i++) {
+				int num1 = rand.nextInt(20) + 1;
+				int num2 = rand.nextInt(20) + 1;
+				int sum = num1 + num2;
+				int wrongAns = sum;
+				while (wrongAns == sum) {
+					wrongAns = rand.nextInt(40)+1;
+				}
+				String expression = Integer.toString(num1) + "+" + Integer.toString(num2);
+
+				shit[i][0] = expression;
+				shit[i][1] = Integer.toString(sum);
+				shit[i][2] = Integer.toString(wrongAns);
+			}
+			return shit;
+		}
 
 		public GamePanel(int s, String oldfilename) {
 			scorefilename = oldfilename;
