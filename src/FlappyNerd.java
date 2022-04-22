@@ -37,7 +37,7 @@ public class FlappyNerd extends JFrame {
 			KeyListener {
 		int pipeSpacing = 700;
 		private int theme = 1;
-		private int JUMPVEL = -11;
+		private int JUMPVEL = -15;
 		private String scorefilename = "EasyHiScores.txt";
 		private Color[] birdColors = { Color.RED, new Color(170, 0, 0) };
 		private Color[] beakColors = { Color.YELLOW, Color.YELLOW };
@@ -57,12 +57,12 @@ public class FlappyNerd extends JFrame {
 		boolean scoreSubmitted = false;
 		Rectangle birdRect;
 		double yvelocity = JUMPVEL;
-		int xvelocity = 7; // was 6
+		int xvelocity = 14; // was 6
 		int scrollVelocity = xvelocity;
 		int framesPassed = 0;
 		int score = 0;
 		int oldScore = -1;
-		Robot bot;
+		// Robot bot;
 
 		final String PI = "\u03C0";
 		final String SQRT = "\u221A";
@@ -163,10 +163,10 @@ public class FlappyNerd extends JFrame {
 				pipeSpacing = 400;
 				hardButton.setBackground(Color.GRAY);
 			}
-			try {
-				bot = new Robot();
-			} catch (Exception e) {
-			}
+			// try {
+			// 	bot = new Robot();
+			// } catch (Exception e) {
+			// }
 
 			initializeData();
 			setLayout(null);
@@ -179,8 +179,8 @@ public class FlappyNerd extends JFrame {
 			UIManager.put("Button.select", Color.GRAY);
 			gameTimer = new Timer(20, new ActionListener() {
 				public void actionPerformed(ActionEvent e) {
-					bot.mouseMove(MouseInfo.getPointerInfo().getLocation().x,
-							MouseInfo.getPointerInfo().getLocation().y); // use
+					// bot.mouseMove(MouseInfo.getPointerInfo().getLocation().x,
+					// 		MouseInfo.getPointerInfo().getLocation().y); // use
 																			// Robot
 																			// to
 																			// move"
@@ -192,8 +192,8 @@ public class FlappyNerd extends JFrame {
 																			// display
 																			// less
 																			// choppy)
-					yvelocity += 0.78;// decrease upwards velocity - originally
-										// .85
+					yvelocity += 1.0;// decrease upwards velocity - originally
+										// .78, apparently .85 before that
 					birdy += yvelocity;// decrease position by velocity
 					birdx += xvelocity;
 
