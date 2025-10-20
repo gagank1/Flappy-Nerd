@@ -16,9 +16,12 @@ public class FlappyNerd extends JFrame {
 	String quizletUrl;
 
 	public static void main(String[] args) {
+		// Enable hardware acceleration for better performance
+		// System.setProperty("sun.java2d.opengl", "true");
+		// System.setProperty("sun.java2d.metal", "true"); // For macOS with Apple Silicon
+		// System.setProperty("sun.java2d.accthreshold", "0");
 		new FlappyNerd("quizletUrl");
 	}
-
 
 	public FlappyNerd(String quizletUrl) {
 		this.quizletUrl = quizletUrl;
@@ -33,8 +36,7 @@ public class FlappyNerd extends JFrame {
 		setVisible(true);
 	}
 
-	class GamePanel extends JPanel implements MouseListener, FocusListener,
-			KeyListener {
+	class GamePanel extends JPanel implements MouseListener, FocusListener, KeyListener {
 		int pipeSpacing = 700;
 		private int theme = 1;
 		private int JUMPVEL = -15;
@@ -56,13 +58,20 @@ public class FlappyNerd extends JFrame {
 		boolean dead = false;
 		boolean scoreSubmitted = false;
 		Rectangle birdRect;
+		double y_acceleration = 0.9;
 		double yvelocity = JUMPVEL;
-		int xvelocity = 14; // was 6
+		int xvelocity = 7; // was 14, then 6 - slower for easier gameplay
 		int scrollVelocity = xvelocity;
 		int framesPassed = 0;
 		int score = 0;
 		int oldScore = -1;
+		int frame_delay = 12;
 		// Robot bot;
+		
+		// FPS tracking variables
+		long lastFpsTime = System.currentTimeMillis();
+		int fpsCounter = 0;
+		int currentFps = 0;
 
 		final String PI = "\u03C0";
 		final String SQRT = "\u221A";
@@ -73,7 +82,9 @@ public class FlappyNerd extends JFrame {
 		final String MINUSPLUS = "\u2213";
 
 		JTextField nameField = new JTextField("Your Name");
-		Timer back = new Timer(22, new ActionListener() {
+
+		// Timer that resets the game when the user dies
+		Timer back = new Timer(frame_delay, new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
 				if (framesPassed > 5)
 					framesPassed -= 5 * (int) Math.sqrt(score + 1);
@@ -100,7 +111,9 @@ public class FlappyNerd extends JFrame {
 		JButton mediumButton = new JButton("Hard");
 		JButton hardButton = new JButton("GG");
 		JButton startButton = new JButton("Start");
-		Timer t = new Timer(1, new ActionListener() {
+
+		// Timer that performs the animation before the game begins
+		Timer t = new Timer(frame_delay, new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
 				homeBirdx += 10;
 				if (homeBirdx > 1200)
@@ -133,13 +146,13 @@ public class FlappyNerd extends JFrame {
 
 			String[][] shit = new String[20][3];
 			Random rand = new Random();
-			for (int i=0; i<20; i++) {
-				int num1 = rand.nextInt(20) + 1;
-				int num2 = rand.nextInt(20) + 1;
+			for (int i = 0; i < 20; i++) {
+				int num1 = rand.nextInt(9) + 1; // single digit: 1-9
+				int num2 = rand.nextInt(9) + 1; // single digit: 1-9
 				int sum = num1 + num2;
 				int wrongAns = sum;
-				while (wrongAns == sum) {
-					wrongAns = rand.nextInt(40)+1;
+				while (wrongAns == sum || wrongAns < 2 || wrongAns > 18) {
+					wrongAns = rand.nextInt(17) + 2; // range 2-18 for single digit addition
 				}
 				String expression = Integer.toString(num1) + "+" + Integer.toString(num2);
 
@@ -155,7 +168,6 @@ public class FlappyNerd extends JFrame {
 			if (scorefilename.equals("EasyHiScores.txt")) {
 				easyButton.setBackground(Color.GRAY);
 				pipeSpacing = 700;
-
 			} else if (scorefilename.equals("MediumHiScores.txt")) {
 				pipeSpacing = 550;
 				mediumButton.setBackground(Color.GRAY);
@@ -170,6 +182,7 @@ public class FlappyNerd extends JFrame {
 
 			initializeData();
 			setLayout(null);
+			setDoubleBuffered(true); // Enable double buffering for smoother rendering
 			setFocusable(true);
 			addMouseListener(this);
 			addKeyListener(this);
@@ -177,24 +190,34 @@ public class FlappyNerd extends JFrame {
 			requestFocus();
 			oldScore = s;
 			UIManager.put("Button.select", Color.GRAY);
-			gameTimer = new Timer(20, new ActionListener() {
+			// original frame delay: 20 ms, framerate: 50 FPS
+			// new frame delay: 16 ms, framerate: 62.5 FPS
+			gameTimer = new Timer(frame_delay, new ActionListener() {
 				public void actionPerformed(ActionEvent e) {
 					// bot.mouseMove(MouseInfo.getPointerInfo().getLocation().x,
 					// 		MouseInfo.getPointerInfo().getLocation().y); // use
-																			// Robot
-																			// to
-																			// move"
-																			// mouse
-																			// to
-																			// current
-																			// location(to
-																			// make
-																			// display
-																			// less
-																			// choppy)
-					yvelocity += 1.0;// decrease upwards velocity - originally
-										// .78, apparently .85 before that
-					birdy += yvelocity;// decrease position by velocity
+					// Robot
+					// to
+					// move"
+					// mouse
+					// to
+					// current
+					// location(to
+					// make
+					// display
+					// less
+					// choppy)
+					// FPS calculation
+					fpsCounter++;
+					long currentTime = System.currentTimeMillis();
+					if (currentTime - lastFpsTime >= 1000) {
+						currentFps = fpsCounter;
+						fpsCounter = 0;
+						lastFpsTime = currentTime;
+					}
+					
+					yvelocity += y_acceleration; // decrease upwards velocity - originally .78, apparently .85 before that
+					birdy += yvelocity; // decrease position by velocity
 					birdx += xvelocity;
 
 					for (int i = 0; i < pipeArray.length; i++) {
@@ -212,19 +235,16 @@ public class FlappyNerd extends JFrame {
 					if (birdy > 685) {
 						dead = true;
 						gameTimer.stop();
-						back.start();// reset(score);
+						back.start(); // reset(score);
 					}
 					if (!dead)
 						framesPassed++;
 
 					easyButton.setBounds(250, 406 + 25 * framesPassed, 50, 50);
-					mediumButton
-							.setBounds(316, 406 + 25 * framesPassed, 50, 50);
+					mediumButton.setBounds(316, 406 + 25 * framesPassed, 50, 50);
 					hardButton.setBounds(383, 406 + 25 * framesPassed, 50, 50);
 					nameField.setBounds(250, 455 + 25 * framesPassed, 200, 30);
-
-					startButton
-							.setBounds(250, 425 + 25 * framesPassed, 181, 50);
+					startButton.setBounds(250, 425 + 25 * framesPassed, 181, 50);
 					score = (birdx - 1500 + pipeSpacing) / pipeSpacing;
 					if (score < 0)
 						score = 0;
@@ -258,7 +278,6 @@ public class FlappyNerd extends JFrame {
 			mediumButton.setForeground(Color.WHITE);
 			mediumButton.setFont(new Font("asdf", Font.BOLD, 20));
 			mediumButton.setBounds(310, 406, 61, 50);
-
 			mediumButton.setFocusable(false);
 			mediumButton.setBorder(BorderFactory.createLineBorder(Color.BLACK));
 			mediumButton.addActionListener(new ActionListener() {
@@ -300,8 +319,6 @@ public class FlappyNerd extends JFrame {
 			startButton.setBorder(BorderFactory.createLineBorder(Color.BLACK));
 			startButton.addActionListener(new ActionListener() {
 				public void actionPerformed(ActionEvent e) {
-					
-
 					GamePanel.this.requestFocus();
 				}
 			});
@@ -335,7 +352,7 @@ public class FlappyNerd extends JFrame {
 			 * if (oldScore >= 0) add(nameField); add(easyButton);
 			 * add(mediumButton); add(hardButton);
 			 */
-			//add(startButton);
+			// add(startButton);
 			t.start();
 			requestFocus();
 		}
@@ -343,18 +360,24 @@ public class FlappyNerd extends JFrame {
 		public void paintComponent(Graphics g) {
 			setBackground(new Color(94, 254, 238));
 			super.paintComponent(g);
+			
+			// Enable rendering hints for better performance
+			Graphics2D g2d = (Graphics2D) g;
+			// g2d.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_SPEED);
+			// g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_OFF);
+			// g2d.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+			
 			g.translate(-scrollVelocity * framesPassed, 0);
 			birdRect = new Rectangle(birdx - 20, birdy - 15, 40, 30);
 			drawClouds((int) (scrollVelocity * framesPassed * 0.9), g);
-			 drawGround(0.4, 30, g);
-			 drawGround(0.3, 20, g);
-			drawTrees(treeHeights,
-					(int) (scrollVelocity * framesPassed * 0.2 + 1500), g);
+			drawGround(0.4, 30, g);
+			drawGround(0.3, 20, g);
+			drawTrees(treeHeights, (int) (scrollVelocity * framesPassed * 0.2 + 1500), g);
 			drawGround(0.2, 10, g);
 			drawPipes(g);
 			if (started)
 				drawBird(birdx, birdy, g.create());
-			 drawGround(-0.1, -10, g);
+			drawGround(-0.1, -10, g);
 
 			g.setFont(new Font("asdf", Font.BOLD, 140)); // display title text
 			int titleX = 100;
@@ -369,16 +392,18 @@ public class FlappyNerd extends JFrame {
 			g.setColor(Color.WHITE);
 			g.drawString(title, titleX, titleY);
 
-
-			
-
 			if (started) { // display score
 				int scorex = 470 + scrollVelocity * framesPassed;
 				int scorey = 100;
 				g.setFont(new Font("", Font.BOLD, 100));
-				drawOutlinedString(score + "", scorex, scorey, Color.WHITE,
-						Color.BLACK, g, 2);
+				drawOutlinedString(score + "", scorex, scorey, Color.WHITE, Color.BLACK, g, 2);
 			}
+			
+			// Display FPS in top right corner
+			int fpsx = 1050 + scrollVelocity * framesPassed;
+			int fpsy = 40;
+			g.setFont(new Font("", Font.BOLD, 30));
+			drawOutlinedString("FPS: " + currentFps, fpsx, fpsy, Color.WHITE, Color.BLACK, g, 2);
 
 			if (!started) {
 				drawBird(homeBirdx, homeBirdy, g);
@@ -386,12 +411,10 @@ public class FlappyNerd extends JFrame {
 			}
 			if (dead)
 				xvelocity = 0;
-
 		}
 
 		public void drawGrass(Graphics g) {
-
-		/*	Color c = new Color(0, 235, 0);
+			/* Color c = new Color(0, 235, 0);
 			g.setColor(c);
 			// g.fillRect(500,700,50,20);
 			for (int x = 0; x < correctGaps.length; x++) {
@@ -399,9 +422,7 @@ public class FlappyNerd extends JFrame {
 					g.fillRect(pipeArray[2][x].x + 90, 680, 10, 50);
 				else
 					g.fillRect(pipeArray[2][x].x, 680, 10, 50);
-
 			}*/
-
 		}
 
 		public void initializeData() {
@@ -418,22 +439,15 @@ public class FlappyNerd extends JFrame {
 
 			for (int i = 0; i < pipeArray[0].length; i++) {
 				int shift = (int) (Math.random() * 100) - 50;
-				pipeArray[0][i] = new Rectangle(i * pipeSpacing + 1500, -500
-						+ shift, 100, 635);
-				pipeArray[1][i] = new Rectangle(i * pipeSpacing + 1500,
-						315 + shift, 100, 100);
-				pipeArray[2][i] = new Rectangle(i * pipeSpacing + 1500,
-						595 + shift, 100, 1000);
+				pipeArray[0][i] = new Rectangle(i * pipeSpacing + 1500, -500 + shift, 100, 635);
+				pipeArray[1][i] = new Rectangle(i * pipeSpacing + 1500, 315 + shift, 100, 100);
+				pipeArray[2][i] = new Rectangle(i * pipeSpacing + 1500, 595 + shift, 100, 1000);
 				if (correctGaps[i]) {
-					wrongRects[i] = new Rectangle(i * pipeSpacing + 1500,
-							135 + shift, 100, 180);
-					rightRects[i] = new Rectangle(i * pipeSpacing + 1500,
-							415 + shift, 100, 180);
+					wrongRects[i] = new Rectangle(i * pipeSpacing + 1500, 135 + shift, 100, 180);
+					rightRects[i] = new Rectangle(i * pipeSpacing + 1500, 415 + shift, 100, 180);
 				} else {
-					wrongRects[i] = new Rectangle(i * pipeSpacing + 1500,
-							415 + shift, 100, 180);
-					rightRects[i] = new Rectangle(i * pipeSpacing + 1500,
-							135 + shift, 100, 180);
+					wrongRects[i] = new Rectangle(i * pipeSpacing + 1500, 415 + shift, 100, 180);
+					rightRects[i] = new Rectangle(i * pipeSpacing + 1500, 135 + shift, 100, 180);
 				}
 			}
 
@@ -454,7 +468,6 @@ public class FlappyNerd extends JFrame {
 
 		public void drawTrees(int[] trees, int x, Graphics g) {
 			for (int i = 0; i < trees.length; i += 1) {
-
 				g.setColor(new Color(101, 51, 0));
 				g.fillRect(i * pipeSpacing + x + 20, trees[i] + 10, 30, 700);
 				g.setColor(Color.BLACK);
@@ -473,7 +486,6 @@ public class FlappyNerd extends JFrame {
 				g.fillOval(i * pipeSpacing + x - 20, trees[i] + 15, 70, 70);
 				g.fillOval(i * pipeSpacing + x - 30, trees[i] + 25, 70, 70);
 				g.fillOval(i * pipeSpacing + x + 30, trees[i] + 25, 70, 70);
-
 			}
 		}
 
@@ -484,7 +496,7 @@ public class FlappyNerd extends JFrame {
 			g.setColor(new Color(50, 170, 0));
 			for (int i = -100; i < 30000; i += 80) {
 				for (int j = 0; j < 4; j++)
-					g.drawLine(i + j + x, 920 - y, i - 20 + j + x, 740 - y);// g.fillRect(i,520,14,28);
+					g.drawLine(i + j + x, 920 - y, i - 20 + j + x, 740 - y);
 			}
 			g.setColor(Color.BLACK);
 			g.drawRect(-100 + x, 720 - y, 30000, 21);
@@ -495,13 +507,11 @@ public class FlappyNerd extends JFrame {
 		}
 
 		public void drawBird(int x, int y, Graphics gc) {
-
 			Graphics2D g = (Graphics2D) gc;
 			if (started)
 				g.transform(AffineTransform.getRotateInstance(yvelocity * 0.03,
-						birdRect.x + birdRect.width / 2 - 5, birdRect.y
-								+ birdRect.height / 2));
-			// g.translate(-scrollVelocity*framesPassed, 0);;;;;
+						birdRect.x + birdRect.width / 2 - 5, birdRect.y + birdRect.height / 2));
+			// g.translate(-scrollVelocity*framesPassed, 0);
 			g.setColor(birdColors[theme]);
 			g.setColor(Color.RED);
 			g.fillRoundRect(x - 20, y - 15, 40, 30, 16, 16);
@@ -509,23 +519,18 @@ public class FlappyNerd extends JFrame {
 			g.drawRoundRect(x - 20, y - 15, 40, 30, 16, 16);
 			g.fillOval(x + 12, y - 10, 3, 3);
 
-			int[] xs = { x - 10, x, x + 10 };// wing
-
+			int[] xs = { x - 10, x, x + 10 }; // wing
 			int[] ys = { y - 1, y + 10, y - 1 };
 			if (yvelocity > 0)
-				ys = new int[] { y + 1, y - 10, y + 1 }; // determine triangle
-															// based on whether
-															// bird is going up
-															// or down
+				ys = new int[] { y + 1, y - 10, y + 1 }; // determine triangle based on whether bird is going up or down
 			g.drawPolygon(xs, ys, 3);
 
-			xs = new int[] { x + 20, x + 35, x + 20 };// beak
+			xs = new int[] { x + 20, x + 35, x + 20 }; // beak
 			ys = new int[] { y - 6, y, y + 6 };
 			g.setColor(beakColors[theme]);
 			g.fillPolygon(xs, ys, 3);
 			g.setColor(Color.BLACK);
 			g.drawPolygon(xs, ys, 3);
-
 		}
 
 		public void drawPipes(Graphics g) {
@@ -533,27 +538,21 @@ public class FlappyNerd extends JFrame {
 			for (int i = 0; i < pipeArray.length; i++) {
 				for (int j = 0; j < pipeArray[i].length; j++) {
 					r = pipeArray[i][j];
-					g.setColor(Color.GREEN);// pipe rectangle
-					g.fillRect((int) r.getX(), (int) r.getY(),
-							(int) r.getWidth(), (int) r.getHeight());
+					g.setColor(Color.GREEN); // pipe rectangle
+					g.fillRect((int) r.getX(), (int) r.getY(), (int) r.getWidth(), (int) r.getHeight());
 					g.setColor(Color.BLACK);
-					g.drawRect((int) r.getX(), (int) r.getY(),
-							(int) r.getWidth(), (int) r.getHeight());
+					g.drawRect((int) r.getX(), (int) r.getY(), (int) r.getWidth(), (int) r.getHeight());
 
-					g.setColor(Color.GREEN);// lip at top of pipe
-					g.fillRoundRect((int) r.getX() - 5, (int) r.getY(),
-							(int) r.getWidth() + 10, 20, 10, 10);
+					g.setColor(Color.GREEN); // lip at top of pipe
+					g.fillRoundRect((int) r.getX() - 5, (int) r.getY(), (int) r.getWidth() + 10, 20, 10, 10);
 					g.setColor(Color.BLACK);
-					g.drawRoundRect((int) r.getX() - 5, (int) r.getY(),
-							(int) r.getWidth() + 10, 20, 10, 10);
+					g.drawRoundRect((int) r.getX() - 5, (int) r.getY(), (int) r.getWidth() + 10, 20, 10, 10);
 
-					g.setColor(Color.GREEN);// lip at bottom of pipe
-					g.fillRoundRect((int) r.getX() - 5,
-							(int) (r.getY() + r.getHeight() - 20),
+					g.setColor(Color.GREEN); // lip at bottom of pipe
+					g.fillRoundRect((int) r.getX() - 5, (int) (r.getY() + r.getHeight() - 20),
 							(int) r.getWidth() + 10, 20, 10, 10);
 					g.setColor(Color.BLACK);
-					g.drawRoundRect((int) r.getX() - 5,
-							(int) (r.getY() + r.getHeight() - 20),
+					g.drawRoundRect((int) r.getX() - 5, (int) (r.getY() + r.getHeight() - 20),
 							(int) r.getWidth() + 10, 20, 10, 10);
 				}
 			}
@@ -563,19 +562,15 @@ public class FlappyNerd extends JFrame {
 			g.setFont(new Font("asdf", Font.BOLD, 40));
 			for (int i = 0; i < rightRects.length; i++) {
 				drawOutlinedString(expressions[equationIndexes[i]][1],
-						rightRects[i].x, rightRects[i].y + 150, Color.WHITE,
-						Color.BLACK, g, 2);
+						rightRects[i].x, rightRects[i].y + 150, Color.WHITE, Color.BLACK, g, 2);
 				drawOutlinedString(expressions[equationIndexes[i]][2],
-						wrongRects[i].x, wrongRects[i].y + 150, Color.WHITE,
-						Color.BLACK, g, 2);
+						wrongRects[i].x, wrongRects[i].y + 150, Color.WHITE, Color.BLACK, g, 2);
 				drawOutlinedString(expressions[equationIndexes[i]][0],
 						rightRects[i].x, 720, Color.WHITE, Color.BLACK, g, 2);
 			}
-
 		}
 
-		public void drawOutlinedString(String s, int x, int y, Color color,
-				Color outline, Graphics g, int offset) {
+		public void drawOutlinedString(String s, int x, int y, Color color, Color outline, Graphics g, int offset) {
 			int strLength = s.length();
 			s += " ";
 			if (strLength > 15) {
@@ -606,11 +601,9 @@ public class FlappyNerd extends JFrame {
 				g.setColor(color);
 				g.drawString(s, x, y + 10);
 			}
-
 		}
 
 		public void reset(int s) {
-
 			FlappyNerd.this.setContentPane(new GamePanel(s, scorefilename));
 			FlappyNerd.this.revalidate();
 		}
@@ -625,7 +618,7 @@ public class FlappyNerd extends JFrame {
 		}
 
 		public void mousePressed(MouseEvent e) {
-			if(!starting){
+			if (!starting) {
 				initializeData();
 				starting = true;
 			}
@@ -648,11 +641,9 @@ public class FlappyNerd extends JFrame {
 		public void keyPressed(KeyEvent e) {
 			if (!dead && birdy > 50)
 				yvelocity = JUMPVEL;
-
 		}
 
 		public void keyReleased(KeyEvent e) {
 		}
 	}
-	
 }
