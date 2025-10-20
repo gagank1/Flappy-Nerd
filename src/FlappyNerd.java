@@ -604,8 +604,10 @@ public class FlappyNerd extends JFrame {
 		}
 
 		public void reset(int s) {
-			FlappyNerd.this.setContentPane(new GamePanel(s, scorefilename));
+			GamePanel newPanel = new GamePanel(s, scorefilename);
+			FlappyNerd.this.setContentPane(newPanel);
 			FlappyNerd.this.revalidate();
+			newPanel.requestFocusInWindow(); // Ensure the new panel gets keyboard focus
 		}
 
 		public void focusGained(FocusEvent e) {
@@ -639,6 +641,10 @@ public class FlappyNerd extends JFrame {
 		}
 
 		public void keyPressed(KeyEvent e) {
+			if (!starting) {
+				initializeData();
+				starting = true;
+			}
 			if (!dead && birdy > 50)
 				yvelocity = JUMPVEL;
 		}
