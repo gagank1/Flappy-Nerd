@@ -1,0 +1,43 @@
+[package]
+name = "flappy_nerd_web"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+wasm-bindgen = { version = "0.2", features = ["serde-serialize"] }
+wasm-bindgen-futures = "0.4"
+web-sys = { version = "0.3", features = [
+    "Window",
+    "Document",
+    "HtmlCanvasElement",
+    "HtmlElement",
+    "CanvasRenderingContext2d",
+    "KeyboardEvent",
+    "MouseEvent",
+    "TouchEvent",
+    "Performance",
+    "Navigator",
+    "Gamepad",
+    "ResizeObserver",
+    "Element",
+    "DomRect",
+    "CssStyleDeclaration",
+    "console",
+    "Event",
+    "EventTarget",
+    "PointerEvent",
+] }
+js-sys = "0.3"
+wgpu = { version = "0.20", features = ["webgl"] }
+pollster = "0.3"
+rand = { version = "0.8", features = ["std", "small_rng"] }
+console_error_panic_hook = "0.1"
+bytemuck = { version = "1", features = ["derive"] }
+anyhow = "1"
+
+[profile.release]
+panic = "abort"
+lto = true

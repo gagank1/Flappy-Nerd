@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Flappy Nerd – WebGPU Edition</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: #04070f;
+        font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      }
+      canvas {
+        width: 100vw;
+        height: 100vh;
+        display: block;
+        touch-action: none;
+      }
+      .fallback {
+        position: fixed;
+        top: 16px;
+        left: 16px;
+        color: #ff8080;
+        font-size: 16px;
+        z-index: 2000;
+        text-shadow: 0 0 6px rgba(0, 0, 0, 0.35);
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="flappy-canvas"></canvas>
+    <script type="module">
+      window.triggerJump = () => console.warn("triggerJump() called before WASM loaded");
+
+      import init, { trigger_jump } from "./pkg/flappy_nerd_web.js";
+
+      const start = async () => {
+        try {
+          await init();
+          window.triggerJump = () => trigger_jump();
+        } catch (err) {
+          console.error(err);
+          const div = document.createElement("div");
+          div.className = "fallback";
+          div.textContent = "Failed to load WebGPU build. See console for details.";
+          document.body.appendChild(div);
+        }
+      };
+
+      start();
+    </script>
+  </body>
+</html>
