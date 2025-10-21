@@ -166,6 +166,13 @@ async fn run(
         .copied()
         .unwrap_or(surface_caps.formats[0]);
 
+    let alpha_mode = surface_caps
+        .alpha_modes
+        .iter()
+        .copied()
+        .find(|mode| *mode == wgpu::CompositeAlphaMode::Opaque)
+        .or_else(|| surface_caps.alpha_modes.first().copied())
+        .unwrap_or(wgpu::CompositeAlphaMode::Opaque);
     let mut config = wgpu::SurfaceConfiguration {
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
         format: surface_format,
@@ -173,7 +180,7 @@ async fn run(
         height: height.max(1),
         present_mode,
         desired_maximum_frame_latency: 1,
-        alpha_mode: wgpu::CompositeAlphaMode::Opaque,
+        alpha_mode,
         view_formats: vec![],
     };
     surface.configure(&device, &config);
@@ -644,8 +651,14 @@ impl Renderer {
             pass.set_pipeline(&self.pipeline);
             pass.set_bind_group(0, &self.bind_group, &[]);
             pass.set_vertex_buffer(0, self.quad_vertex.slice(..));
-            pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
-            pass.draw(0..6, 0..count as u32);
+            if count > 0 {
+                let instance_size = std::mem::size_of::<InstanceData>() as u64;
+                let slice = self
+                    .instance_buffer
+                    .slice(0..(instance_size * count as u64));
+                pass.set_vertex_buffer(1, slice);
+                pass.draw(0..6, 0..count as u32);
+            }
         }
 
         queue.submit(Some(encoder.finish()));
