@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Flappy Nerd - WebGPU Edition</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        background: #4ba0eb;
+        font-family: "Segoe UI", sans-serif;
+        height: 100%;
+        overflow: hidden;
+      }
+
+      #container {
+        position: relative;
+        width: 100vw;
+        height: 100vh;
+      }
+
+      #game-canvas {
+        width: 100%;
+        height: 100%;
+        display: block;
+        touch-action: manipulation;
+      }
+
+      #hud {
+        position: absolute;
+        top: 12px;
+        left: 12px;
+        color: #ffffff;
+        font-size: 16px;
+        text-shadow: 0 0 6px rgba(0, 0, 0, 0.8);
+        white-space: pre;
+        pointer-events: none;
+      }
+
+      #fallback {
+        position: absolute;
+        bottom: 12px;
+        right: 12px;
+        color: rgba(255, 255, 255, 0.75);
+        font-size: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="container">
+      <canvas id="game-canvas"></canvas>
+      <div id="hud">Initializing…</div>
+      <div id="fallback">Tap or press Space/Click. Call <code>window.triggerJump()</code> to flap.</div>
+    </div>
+    <script type="module">
+      import init from "./pkg/flappy_nerd_web.js";
+
+      async function main() {
+        try {
+          await init();
+        } catch (err) {
+          console.error("Failed to start Flappy Nerd", err);
+          const hud = document.getElementById("hud");
+          if (hud) {
+            hud.textContent = "WebGPU initialization failed.\nCheck browser support.";
+          }
+        }
+      }
+
+      main();
+    </script>
+  </body>
+</html>
