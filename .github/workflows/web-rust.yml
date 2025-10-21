@@ -1,0 +1,39 @@
+name: WebGPU WASM build
+
+on:
+  push:
+    branches: [ main, webgpu-port ]
+  pull_request:
+    paths:
+      - 'web-rust/**'
+      - '.github/workflows/web-rust.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: wasm32-unknown-unknown
+          default: true
+
+      - name: Install wasm-pack
+        uses: jetli/wasm-pack-action@v0.4.0
+        with:
+          version: latest
+
+      - name: Build WebAssembly bundle
+        run: |
+          cd web-rust
+          wasm-pack build --target web --release
+
+      - name: Upload bundle artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: flappy-nerd-webgpu
+          path: web-rust/pkg/
