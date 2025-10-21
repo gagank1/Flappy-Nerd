@@ -9,7 +9,7 @@ import {
   TilingSprite,
 } from 'pixi.js';
 
-const LOGICAL_WIDTH = 480;
+const LOGICAL_WIDTH = 1200;
 const LOGICAL_HEIGHT = 800;
 
 const FRAME_DURATION = 12 / 1000; // Original Swing timer tick (12 ms)
@@ -24,6 +24,7 @@ const PIPE_TOP_HEIGHT = 635;
 const PIPE_BOTTOM_Y = 595;
 const PIPE_BOTTOM_HEIGHT = 1000;
 const PIPE_SHIFT_RANGE = 50;
+const FIRST_PIPE_X = 1500;
 
 const BIRD_WIDTH = 40;
 const BIRD_HEIGHT = 30;
@@ -164,9 +165,8 @@ class PipePair {
   public readonly container: Container = new Container();
   private readonly top: Graphics = new Graphics();
   private readonly bottom: Graphics = new Graphics();
-  public x = 0;
   public shift = 0;
-  public passed = false;
+  private baseX = 0;
 
   constructor() {
     this.container.addChild(this.top, this.bottom);
@@ -195,7 +195,7 @@ class PipePair {
   }
 
   public setX(x: number): void {
-    this.x = x;
+    this.baseX = x;
     this.container.x = x;
   }
 
@@ -207,7 +207,7 @@ class PipePair {
 
   public getTopBounds(): RectBounds {
     return {
-      x: this.x,
+      x: this.baseX,
       y: this.top.y,
       width: PIPE_WIDTH,
       height: PIPE_TOP_HEIGHT,
@@ -216,11 +216,15 @@ class PipePair {
 
   public getBottomBounds(): RectBounds {
     return {
-      x: this.x,
+      x: this.baseX,
       y: this.bottom.y,
       width: PIPE_WIDTH,
       height: PIPE_BOTTOM_HEIGHT,
     };
+  }
+
+  public getWorldX(): number {
+    return this.baseX;
   }
 }
 
@@ -233,6 +237,7 @@ interface TreeInstance {
 
 class Game {
   private readonly world: Container;
+  private readonly playfield: Container = new Container();
   private readonly pipeContainer: Container = new Container();
   private readonly pipes: PipePair[] = [];
   private readonly bird: Bird = new Bird();
@@ -264,11 +269,12 @@ class Game {
   });
   private readonly debugGraphics: Graphics = new Graphics();
   private readonly cloudLayer: TilingSprite;
-  private readonly distantGround: { layer: TilingSprite; speed: number }[] = [];
+  private readonly distantGround: { layer: TilingSprite; shift: number }[] = [];
   private readonly frontGround: TilingSprite;
   private readonly treeContainer: Container = new Container();
   private readonly trees: TreeInstance[] = [];
 
+  private birdWorldX = BIRD_X;
   private birdY = BIRD_START_Y;
   private birdVelocity = 0;
   private started = false;
@@ -286,38 +292,41 @@ class Game {
   constructor(world: Container, renderer: Renderer) {
     this.world = world;
 
+    this.world.addChild(this.playfield);
+    this.playfield.sortableChildren = true;
+
     const background = new Sprite(Texture.WHITE);
     background.tint = 0x5efeee;
     background.width = LOGICAL_WIDTH;
     background.height = LOGICAL_HEIGHT;
     background.position.set(0, 0);
-    this.world.addChild(background);
+    this.playfield.addChild(background);
 
     this.cloudLayer = new TilingSprite(createCloudTexture(renderer), LOGICAL_WIDTH + 400, 90);
     this.cloudLayer.position.set(-200, -40);
-    this.world.addChild(this.cloudLayer);
+    this.playfield.addChild(this.cloudLayer);
 
     const groundTexture = createGroundTexture(renderer);
 
     this.createGroundLayers(groundTexture);
-    this.world.addChild(this.treeContainer);
+    this.playfield.addChild(this.treeContainer);
     this.createTrees();
 
     this.pipeContainer.sortableChildren = false;
-    this.world.addChild(this.pipeContainer);
+    this.playfield.addChild(this.pipeContainer);
 
     this.bird.position.set(BIRD_X, this.birdY);
     this.bird.visible = false;
-    this.world.addChild(this.bird);
+    this.playfield.addChild(this.bird);
 
     this.frontGround = new TilingSprite(groundTexture, LOGICAL_WIDTH + 400, groundTexture.height);
     this.frontGround.y = 730;
     this.frontGround.x = -200;
     this.frontGround.alpha = 0.95;
-    this.world.addChild(this.frontGround);
+    this.playfield.addChild(this.frontGround);
 
     this.idleBirds.addChild(this.homeBird, this.homeBirdGhost);
-    this.world.addChild(this.idleBirds);
+    this.playfield.addChild(this.idleBirds);
 
     this.scoreText.anchor.set(0.5, 0.5);
     this.scoreText.position.set(LOGICAL_WIDTH / 2, 100);
@@ -333,7 +342,7 @@ class Game {
 
     if (debugEnabled) {
       this.debugGraphics.zIndex = 5000;
-      this.world.addChild(this.debugGraphics);
+      this.playfield.addChild(this.debugGraphics);
     }
 
     this.createPipes();
@@ -342,26 +351,27 @@ class Game {
 
   private createGroundLayers(texture: Texture): void {
     const layerConfig = [
-      { speed: 0.4, offsetY: 30, alpha: 0.7 },
-      { speed: 0.3, offsetY: 20, alpha: 0.8 },
-      { speed: 0.2, offsetY: 10, alpha: 0.9 },
+      { shift: 0.4, offsetY: 30, alpha: 0.7 },
+      { shift: 0.3, offsetY: 20, alpha: 0.8 },
+      { shift: 0.2, offsetY: 10, alpha: 0.9 },
     ];
 
     for (const config of layerConfig) {
-      const layer = new TilingSprite(texture, LOGICAL_WIDTH + 400, texture.height);
+      const layer = new TilingSprite(texture, LOGICAL_WIDTH + 800, texture.height);
       layer.x = -200;
       layer.y = 720 - config.offsetY;
       layer.alpha = config.alpha;
-      this.distantGround.push({ layer, speed: config.speed });
-      this.world.addChild(layer);
+      this.distantGround.push({ layer, shift: config.shift });
+      this.playfield.addChild(layer);
     }
   }
 
   private createTrees(): void {
     for (let i = 0; i < TREE_COUNT; i += 1) {
       const tree = this.buildTree();
-      const baseX = 1500 + i * PIPE_SPACING;
+      const baseX = FIRST_PIPE_X + i * PIPE_SPACING;
       tree.sprite.x = baseX;
+      tree.sprite.y = tree.height;
       this.treeContainer.addChild(tree.sprite);
       this.trees.push({ baseX, initialBase: baseX, sprite: tree.sprite, height: tree.height });
     }
@@ -398,7 +408,6 @@ class Game {
     }
 
     container.cacheAsBitmap = true;
-    container.y = height;
     return { sprite: container, height };
   }
 
@@ -410,19 +419,19 @@ class Game {
       this.pipes.push(pipe);
     }
   }
-
   private resetPipes(): void {
-    let x = LOGICAL_WIDTH + 300;
+    let x = FIRST_PIPE_X;
     for (const pipe of this.pipes) {
       const shift = Math.round(Math.random() * PIPE_SHIFT_RANGE * 2) - PIPE_SHIFT_RANGE;
       pipe.applyShift(shift);
       pipe.setX(x);
-      pipe.passed = false;
+      // reset pipe state
       x += PIPE_SPACING;
     }
   }
 
   public reset(): void {
+    this.birdWorldX = BIRD_X;
     this.birdY = BIRD_START_Y;
     this.birdVelocity = 0;
     this.started = false;
@@ -444,7 +453,7 @@ class Game {
       tree.sprite.x = tree.baseX;
     }
     this.homeBird.position.set(this.homeBirdX, this.homeBirdY);
-    this.homeBirdGhost.position.set(this.homeBirdX - (LOGICAL_WIDTH + 140), this.homeBirdY);
+    this.homeBirdGhost.position.set(this.homeBirdX - LOGICAL_WIDTH, this.homeBirdY);
     this.resetPipes();
     this.syncSprites();
     this.updateParallax();
@@ -472,6 +481,7 @@ class Game {
   public updateFixed(dt: number): void {
     if (!this.started) {
       this.updateIdleBirds(dt);
+      this.updateParallax();
       return;
     }
 
@@ -480,25 +490,22 @@ class Game {
 
     if (this.alive) {
       this.framesPassed += 1;
-      this.scrollDistance += PIPE_SPEED * dt;
-    }
-
-    if (this.alive) {
-      for (const pipe of this.pipes) {
-        pipe.setX(pipe.x - PIPE_SPEED * dt);
-      }
-      this.recyclePipes();
-      this.checkCollisions();
-      this.updateScore();
-    } else {
-      if (this.birdY > BIRD_DEATH_Y) {
-        this.birdY = BIRD_DEATH_Y;
-        this.birdVelocity = 0;
-      }
+      this.birdWorldX += PIPE_SPEED * dt;
     }
 
     if (this.birdY > BIRD_DEATH_Y && this.alive) {
       this.kill();
+    }
+
+    this.scrollDistance = this.birdWorldX - BIRD_X;
+
+    if (this.alive) {
+      this.recyclePipes();
+      this.checkCollisions();
+      this.updateScore();
+    } else if (this.birdY > BIRD_DEATH_Y) {
+      this.birdY = BIRD_DEATH_Y;
+      this.birdVelocity = 0;
     }
 
     this.updateParallax();
@@ -506,8 +513,8 @@ class Game {
 
   private updateIdleBirds(dt: number): void {
     this.homeBirdX += HOME_BIRD_SPEED * dt;
-    if (this.homeBirdX > LOGICAL_WIDTH + 140) {
-      this.homeBirdX -= LOGICAL_WIDTH + 140;
+    if (this.homeBirdX > LOGICAL_WIDTH) {
+      this.homeBirdX -= LOGICAL_WIDTH;
     }
 
     this.homeBirdY += this.homeBirdVelocity * dt;
@@ -520,7 +527,7 @@ class Game {
     }
 
     this.homeBird.position.set(this.homeBirdX, this.homeBirdY);
-    this.homeBirdGhost.position.set(this.homeBirdX - (LOGICAL_WIDTH + 140), this.homeBirdY);
+    this.homeBirdGhost.position.set(this.homeBirdX - LOGICAL_WIDTH, this.homeBirdY);
 
     const descending = this.homeBirdVelocity > 0;
     this.homeBird.rotation = 0;
@@ -531,29 +538,34 @@ class Game {
 
   private recyclePipes(): void {
     const first = this.pipes[0];
-    if (first.x + PIPE_WIDTH < -300) {
+    const screenRight = first.getWorldX() - this.scrollDistance + PIPE_WIDTH;
+    if (screenRight < -300) {
       const last = this.pipes[this.pipes.length - 1];
       const shift = Math.round(Math.random() * PIPE_SHIFT_RANGE * 2) - PIPE_SHIFT_RANGE;
       first.applyShift(shift);
-      first.setX(last.x + PIPE_SPACING);
-      first.passed = false;
+      first.setX(last.getWorldX() + PIPE_SPACING);
       this.pipes.push(this.pipes.shift()!);
     }
   }
 
   private updateScore(): void {
-    for (const pipe of this.pipes) {
-      if (!pipe.passed && pipe.x + PIPE_WIDTH < BIRD_X - BIRD_WIDTH / 2) {
-        pipe.passed = true;
-        this.score += 1;
-        this.scoreText.text = `${this.score}`;
-      }
+    const computed = Math.max(
+      0,
+      Math.floor((this.birdWorldX - FIRST_PIPE_X + PIPE_SPACING) / PIPE_SPACING),
+    );
+    if (computed !== this.score) {
+      this.score = computed;
+      this.scoreText.text = `${this.score}`;
     }
   }
 
   private checkCollisions(): void {
+    if (!this.alive) {
+      return;
+    }
+
     const birdBounds: RectBounds = {
-      x: BIRD_X - BIRD_WIDTH / 2,
+      x: this.birdWorldX - BIRD_WIDTH / 2,
       y: this.birdY - BIRD_HEIGHT / 2,
       width: BIRD_WIDTH,
       height: BIRD_HEIGHT,
@@ -577,10 +589,14 @@ class Game {
   }
 
   public syncSprites(): void {
-    this.bird.position.set(BIRD_X, this.birdY);
+    this.playfield.x = -this.scrollDistance;
+
+    this.bird.position.set(this.birdWorldX, this.birdY);
     const velocityPerTick = this.birdVelocity * FRAME_DURATION;
     this.bird.rotation = Math.max(-0.6, Math.min(0.6, velocityPerTick * 0.03));
     this.bird.setWing(velocityPerTick > 0);
+
+    this.scoreText.visible = this.started;
 
     this.titleText.y = 150 - this.framesPassed * 25;
     if (this.titleText.y < -200) {
@@ -591,7 +607,7 @@ class Game {
       this.debugGraphics.clear();
       this.debugGraphics.lineStyle({ width: 2, color: 0xff0000, alpha: 0.8 });
       this.debugGraphics.drawRect(
-        BIRD_X - BIRD_WIDTH / 2,
+        this.birdWorldX - BIRD_WIDTH / 2,
         this.birdY - BIRD_HEIGHT / 2,
         BIRD_WIDTH,
         BIRD_HEIGHT,
@@ -607,22 +623,26 @@ class Game {
   }
 
   private updateParallax(): void {
-    this.cloudLayer.tilePosition.x = -this.scrollDistance * 0.9;
+    this.cloudLayer.x = -200 + this.scrollDistance * 0.9;
+
     for (const layer of this.distantGround) {
-      layer.layer.tilePosition.x = -this.scrollDistance * layer.speed;
+      layer.layer.x = -200 + this.scrollDistance * layer.shift;
     }
-    this.frontGround.tilePosition.x = this.scrollDistance * 0.1;
+
+    this.frontGround.x = -200 - this.scrollDistance * 0.1;
 
     const loopDistance = PIPE_SPACING * TREE_COUNT;
     for (const tree of this.trees) {
-      let x = tree.baseX - this.scrollDistance * 0.2;
-      while (x < -250) {
+      let worldX = tree.baseX + this.scrollDistance * 0.2;
+      let screenX = worldX - this.scrollDistance;
+      while (screenX < -250) {
         tree.baseX += loopDistance;
         tree.height = 300 + Math.random() * 300;
         tree.sprite.y = tree.height;
-        x = tree.baseX - this.scrollDistance * 0.2;
+        worldX = tree.baseX + this.scrollDistance * 0.2;
+        screenX = worldX - this.scrollDistance;
       }
-      tree.sprite.x = x;
+      tree.sprite.x = worldX;
     }
   }
 

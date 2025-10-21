@@ -36,3 +36,7 @@ Then open the displayed local URL.
 ## Blink-tap hook
 
 The global function `window.triggerJump()` is available and will trigger the same flap action as keyboard, mouse, or touch input. This hook is defined in `index.html` and re-bound in `src/main.ts` once the PixiJS game initializes.
+
+## Display resolution
+
+The Pixi scene uses a 1200×800 logical canvas so that all world coordinates line up with the original Java implementation. The renderer still scales responsively to fit the browser window.
