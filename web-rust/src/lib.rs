@@ -49,7 +49,7 @@ pub async fn start() -> Result<(), JsValue> {
     install_trigger_jump(&window, &jump_flag)?;
     install_input_listeners(&window, &canvas, &jump_flag)?;
 
-    match run(canvas, hud, jump_flag.clone()).await {
+    match run(canvas, hud.clone(), jump_flag.clone()).await {
         Ok(()) => Ok(()),
         Err(err) => {
             error!("{:#}", err);
@@ -112,7 +112,7 @@ fn install_input_listeners(
 
 async fn run(canvas: HtmlCanvasElement, hud: HtmlDivElement, jump_flag: Rc<RefCell<bool>>) -> Result<()> {
     let instance = wgpu::Instance::default();
-    let surface = unsafe { instance.create_surface_from_canvas(&canvas) }?;
+    let surface = instance.create_surface(wgpu::SurfaceTarget::Canvas(canvas.clone()))?;
 
     let adapter = instance
         .request_adapter(&wgpu::RequestAdapterOptions {
@@ -132,7 +132,8 @@ async fn run(canvas: HtmlCanvasElement, hud: HtmlDivElement, jump_flag: Rc<RefCe
             },
             None,
         )
-        .await?;
+        .await
+        .map_err(|e| anyhow!("Request device failed: {}", e))?;
 
     let (width, height) = canvas_size(&canvas);
     let surface_caps = surface.get_capabilities(&adapter);
@@ -193,8 +194,8 @@ async fn run(canvas: HtmlCanvasElement, hud: HtmlDivElement, jump_flag: Rc<RefCe
 }
 
 fn start_animation_loop(state: Rc<RefCell<AppState>>) -> Result<()> {
-    let window = window().ok_or_else(|| anyhow!("No window"))?;
-    let performance = window.performance().ok_or_else(|| anyhow!("No performance"))?;
+    let win = window().ok_or_else(|| anyhow!("No window"))?;
+    let performance = win.performance().ok_or_else(|| anyhow!("No performance"))?;
     let last_time = Rc::new(RefCell::new(performance.now()));
 
     let closure_state = state.clone();
@@ -220,7 +221,7 @@ fn start_animation_loop(state: Rc<RefCell<AppState>>) -> Result<()> {
             }
         }
 
-        if let Some(window) = window() {
+        if let Some(win) = window() {
             let should_request = {
                 let state_ref = closure_state.borrow();
                 state_ref.raf_closure.is_some()
@@ -232,7 +233,7 @@ fn start_animation_loop(state: Rc<RefCell<AppState>>) -> Result<()> {
                     .as_ref()
                     .map(|c| c.as_ref().unchecked_ref())
                 {
-                    if window.request_animation_frame(cb).is_err() {
+                    if win.request_animation_frame(cb).is_err() {
                         error!("Failed to schedule animation frame");
                     }
                 }
@@ -251,7 +252,8 @@ fn start_animation_loop(state: Rc<RefCell<AppState>>) -> Result<()> {
         .as_ref()
         .map(|c| c.as_ref().unchecked_ref())
     {
-        window.request_animation_frame(cb)?;
+        win.request_animation_frame(cb)
+            .map_err(|_| anyhow!("Failed to request animation frame"))?;
     }
     Ok(())
 }
@@ -518,6 +520,7 @@ impl Renderer {
                     },
                     InstanceData::desc(),
                 ],
+                compilation_options: Default::default(),
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
@@ -527,6 +530,7 @@ impl Renderer {
                     blend: Some(wgpu::BlendState::ALPHA_BLENDING),
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
+                compilation_options: Default::default(),
             }),
             primitive: wgpu::PrimitiveState {
                 topology: wgpu::PrimitiveTopology::TriangleList,
@@ -603,10 +607,12 @@ impl Renderer {
                             b: bg_color[2] as f64,
                             a: 1.0,
                         }),
-                        store: true,
+                        store: wgpu::StoreOp::Store,
                     },
                 })],
                 depth_stencil_attachment: None,
+                occlusion_query_set: None,
+                timestamp_writes: None,
             });
             pass.set_pipeline(&self.pipeline);
             pass.set_bind_group(0, &self.bind_group, &[]);
