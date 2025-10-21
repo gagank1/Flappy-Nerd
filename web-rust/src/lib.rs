@@ -49,7 +49,7 @@ pub async fn start() -> Result<(), JsValue> {
     install_trigger_jump(&window, &jump_flag)?;
     install_input_listeners(&window, &canvas, &jump_flag)?;
 
-    match run(canvas, hud, jump_flag.clone()).await {
+    match run(canvas, hud.clone(), jump_flag.clone()).await {
         Ok(()) => Ok(()),
         Err(err) => {
             error!("{:#}", err);
@@ -122,7 +122,7 @@ async fn run(
     jump_flag: Rc<RefCell<bool>>,
 ) -> Result<()> {
     let instance = wgpu::Instance::default();
-    let surface = unsafe { instance.create_surface_from_canvas(&canvas) }?;
+    let surface = instance.create_surface(wgpu::SurfaceTarget::Canvas(canvas.clone()))?;
 
     let adapter = instance
         .request_adapter(&wgpu::RequestAdapterOptions {
@@ -142,14 +142,15 @@ async fn run(
             },
             None,
         )
-        .await?;
+        .await
+        .map_err(|e| anyhow!("Request device failed: {}", e))?;
 
     let (width, height) = canvas_size(&canvas);
     set_canvas_size(&canvas, width, height);
     let surface_caps = surface.get_capabilities(&adapter);
     let mut present_mode = wgpu::PresentMode::Fifo;
-    if let Some(window) = web_sys::window() {
-        if let Ok(query) = window.location().search() {
+    if let Some(win) = web_sys::window() {
+        if let Ok(query) = win.location().search() {
             if query.contains("uncapped=1")
                 && surface_caps
                     .present_modes
@@ -166,13 +167,6 @@ async fn run(
         .copied()
         .unwrap_or(surface_caps.formats[0]);
 
-    let alpha_mode = surface_caps
-        .alpha_modes
-        .iter()
-        .copied()
-        .find(|mode| *mode == wgpu::CompositeAlphaMode::Opaque)
-        .or_else(|| surface_caps.alpha_modes.first().copied())
-        .unwrap_or(wgpu::CompositeAlphaMode::Opaque);
     let mut config = wgpu::SurfaceConfiguration {
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
         format: surface_format,
@@ -180,7 +174,7 @@ async fn run(
         height: height.max(1),
         present_mode,
         desired_maximum_frame_latency: 1,
-        alpha_mode,
+        alpha_mode: wgpu::CompositeAlphaMode::Opaque,
         view_formats: vec![],
     };
     surface.configure(&device, &config);
@@ -211,8 +205,8 @@ async fn run(
 }
 
 fn start_animation_loop(state: Rc<RefCell<AppState>>) -> Result<()> {
-    let window = window().ok_or_else(|| anyhow!("No window"))?;
-    let performance = window
+    let win = window().ok_or_else(|| anyhow!("No window"))?;
+    let performance = win
         .performance()
         .ok_or_else(|| anyhow!("No performance"))?;
     let last_time = Rc::new(RefCell::new(performance.now()));
@@ -238,7 +232,7 @@ fn start_animation_loop(state: Rc<RefCell<AppState>>) -> Result<()> {
             }
         }
 
-        if let Some(window) = window() {
+        if let Some(win) = window() {
             let should_request = {
                 let state_ref = closure_state.borrow();
                 state_ref.raf_closure.is_some()
@@ -250,7 +244,7 @@ fn start_animation_loop(state: Rc<RefCell<AppState>>) -> Result<()> {
                     .as_ref()
                     .map(|c| c.as_ref().unchecked_ref())
                 {
-                    if window.request_animation_frame(cb).is_err() {
+                    if win.request_animation_frame(cb).is_err() {
                         error!("Failed to schedule animation frame");
                     }
                 }
@@ -269,7 +263,8 @@ fn start_animation_loop(state: Rc<RefCell<AppState>>) -> Result<()> {
         .as_ref()
         .map(|c| c.as_ref().unchecked_ref())
     {
-        window.request_animation_frame(cb)?;
+        win.request_animation_frame(cb)
+            .map_err(|_| anyhow!("Failed to request animation frame"))?;
     }
     Ok(())
 }
@@ -376,8 +371,8 @@ impl AppState {
 }
 
 fn parse_bg_color() -> [f32; 3] {
-    if let Some(window) = web_sys::window() {
-        if let Ok(query) = window.location().search() {
+    if let Some(win) = web_sys::window() {
+        if let Ok(query) = win.location().search() {
             if let Some(pos) = query.find("bg=") {
                 let value = &query[pos + 3..];
                 let hex = value.split('&').next().unwrap_or("");
@@ -556,6 +551,7 @@ impl Renderer {
                     },
                     InstanceData::desc(),
                 ],
+                compilation_options: Default::default(),
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
@@ -565,6 +561,7 @@ impl Renderer {
                     blend: Some(wgpu::BlendState::ALPHA_BLENDING),
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
+                compilation_options: Default::default(),
             }),
             primitive: wgpu::PrimitiveState {
                 topology: wgpu::PrimitiveTopology::TriangleList,
@@ -612,19 +609,17 @@ impl Renderer {
         instances: &[InstanceData],
         bg_color: [f32; 3],
     ) -> Result<(), wgpu::SurfaceError> {
-        let count = instances.len();
-        if count > 0 {
-            self.ensure_capacity(device, count);
-            queue.write_buffer(&self.instance_buffer, 0, bytemuck::cast_slice(instances));
+        if instances.is_empty() {
+            return Ok(());
         }
+        self.ensure_capacity(device, instances.len());
+        queue.write_buffer(&self.instance_buffer, 0, bytemuck::cast_slice(instances));
 
         let screen = [config.width as f32, config.height as f32];
         queue.write_buffer(&self.uniform_buffer, 0, bytemuck::cast_slice(&screen));
 
         let frame = surface.get_current_texture()?;
-        let view = frame
-            .texture
-            .create_view(&wgpu::TextureViewDescriptor::default());
+        let view = frame.texture.create_view(&wgpu::TextureViewDescriptor::default());
 
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("render encoder"),
@@ -643,22 +638,18 @@ impl Renderer {
                             b: bg_color[2] as f64,
                             a: 1.0,
                         }),
-                        store: true,
+                        store: wgpu::StoreOp::Store,
                     },
                 })],
                 depth_stencil_attachment: None,
+                occlusion_query_set: None,
+                timestamp_writes: None,
             });
             pass.set_pipeline(&self.pipeline);
             pass.set_bind_group(0, &self.bind_group, &[]);
             pass.set_vertex_buffer(0, self.quad_vertex.slice(..));
-            if count > 0 {
-                let instance_size = std::mem::size_of::<InstanceData>() as u64;
-                let slice = self
-                    .instance_buffer
-                    .slice(0..(instance_size * count as u64));
-                pass.set_vertex_buffer(1, slice);
-                pass.draw(0..6, 0..count as u32);
-            }
+            pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
+            pass.draw(0..6, 0..instances.len() as u32);
         }
 
         queue.submit(Some(encoder.finish()));
@@ -849,10 +840,7 @@ fn rect(
     offset: [f32; 2],
 ) -> InstanceData {
     InstanceData {
-        position: [
-            position[0] * scale + offset[0],
-            position[1] * scale + offset[1],
-        ],
+        position: [position[0] * scale + offset[0], position[1] * scale + offset[1]],
         size: [size[0] * scale, size[1] * scale],
         color,
     }
