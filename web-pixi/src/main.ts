@@ -14,9 +14,9 @@ const LOGICAL_HEIGHT = 800;
 
 const FRAME_DURATION = 12 / 1000; // Original Swing timer tick (12 ms)
 
-const GRAVITY = 0.9 / FRAME_DURATION;
-const FLAP_VELOCITY = -15 / FRAME_DURATION;
-const PIPE_SPEED = 7 / FRAME_DURATION;
+const GRAVITY_PER_TICK = 0.9;
+const FLAP_IMPULSE = -15;
+const PIPE_SPEED_PER_TICK = 7;
 const PIPE_SPACING = 700;
 const PIPE_WIDTH = 100;
 const PIPE_TOP_Y = -500;
@@ -32,8 +32,8 @@ const BIRD_X = 80;
 const BIRD_START_Y = 300;
 const BIRD_DEATH_Y = 685;
 
-const HOME_BIRD_SPEED = 10 / FRAME_DURATION;
-const HOME_BIRD_VERTICAL_SPEED = 6 / FRAME_DURATION;
+const HOME_BIRD_SPEED_PER_TICK = 10;
+const HOME_BIRD_VERTICAL_SPEED_PER_TICK = 6;
 const TREE_COUNT = 20;
 
 const MAX_FRAME_DELTA = 0.1;
@@ -287,7 +287,7 @@ class Game {
 
   private homeBirdX = 0;
   private homeBirdY = BIRD_START_Y;
-  private homeBirdVelocity = -HOME_BIRD_VERTICAL_SPEED;
+  private homeBirdVelocity = -HOME_BIRD_VERTICAL_SPEED_PER_TICK;
 
   constructor(world: Container, renderer: Renderer) {
     this.world = world;
@@ -303,7 +303,7 @@ class Game {
     this.playfield.addChild(background);
 
     this.cloudLayer = new TilingSprite(createCloudTexture(renderer), LOGICAL_WIDTH + 400, 90);
-    this.cloudLayer.position.set(-200, -40);
+    this.cloudLayer.position.set(0, -45);
     this.playfield.addChild(this.cloudLayer);
 
     const groundTexture = createGroundTexture(renderer);
@@ -321,7 +321,7 @@ class Game {
 
     this.frontGround = new TilingSprite(groundTexture, LOGICAL_WIDTH + 400, groundTexture.height);
     this.frontGround.y = 730;
-    this.frontGround.x = -200;
+    this.frontGround.x = -100;
     this.frontGround.alpha = 0.95;
     this.playfield.addChild(this.frontGround);
 
@@ -358,7 +358,7 @@ class Game {
 
     for (const config of layerConfig) {
       const layer = new TilingSprite(texture, LOGICAL_WIDTH + 800, texture.height);
-      layer.x = -200;
+      layer.x = -100;
       layer.y = 720 - config.offsetY;
       layer.alpha = config.alpha;
       this.distantGround.push({ layer, shift: config.shift });
@@ -445,7 +445,7 @@ class Game {
     this.titleText.visible = true;
     this.homeBirdX = 0;
     this.homeBirdY = BIRD_START_Y;
-    this.homeBirdVelocity = -HOME_BIRD_VERTICAL_SPEED;
+    this.homeBirdVelocity = -HOME_BIRD_VERTICAL_SPEED_PER_TICK;
     for (const tree of this.trees) {
       tree.baseX = tree.initialBase;
       tree.height = 300 + Math.random() * 300;
@@ -474,23 +474,25 @@ class Game {
     }
 
     if (this.birdY > 50) {
-      this.birdVelocity = FLAP_VELOCITY;
+      this.birdVelocity = FLAP_IMPULSE;
     }
   }
 
   public updateFixed(dt: number): void {
+    const step = dt / FRAME_DURATION;
+
     if (!this.started) {
-      this.updateIdleBirds(dt);
+      this.updateIdleBirds(step);
       this.updateParallax();
       return;
     }
 
-    this.birdVelocity += GRAVITY * dt;
-    this.birdY += this.birdVelocity * dt;
+    this.birdVelocity += GRAVITY_PER_TICK * step;
+    this.birdY += this.birdVelocity * step;
 
     if (this.alive) {
       this.framesPassed += 1;
-      this.birdWorldX += PIPE_SPEED * dt;
+      this.birdWorldX += PIPE_SPEED_PER_TICK * step;
     }
 
     if (this.birdY > BIRD_DEATH_Y && this.alive) {
@@ -511,19 +513,19 @@ class Game {
     this.updateParallax();
   }
 
-  private updateIdleBirds(dt: number): void {
-    this.homeBirdX += HOME_BIRD_SPEED * dt;
+  private updateIdleBirds(step: number): void {
+    this.homeBirdX += HOME_BIRD_SPEED_PER_TICK * step;
     if (this.homeBirdX > LOGICAL_WIDTH) {
       this.homeBirdX -= LOGICAL_WIDTH;
     }
 
-    this.homeBirdY += this.homeBirdVelocity * dt;
+    this.homeBirdY += this.homeBirdVelocity * step;
     if (this.homeBirdY < 260) {
       this.homeBirdY = 260;
-      this.homeBirdVelocity = HOME_BIRD_VERTICAL_SPEED;
+      this.homeBirdVelocity = HOME_BIRD_VERTICAL_SPEED_PER_TICK;
     } else if (this.homeBirdY > 360) {
       this.homeBirdY = 360;
-      this.homeBirdVelocity = -HOME_BIRD_VERTICAL_SPEED;
+      this.homeBirdVelocity = -HOME_BIRD_VERTICAL_SPEED_PER_TICK;
     }
 
     this.homeBird.position.set(this.homeBirdX, this.homeBirdY);
@@ -592,7 +594,7 @@ class Game {
     this.playfield.x = -this.scrollDistance;
 
     this.bird.position.set(this.birdWorldX, this.birdY);
-    const velocityPerTick = this.birdVelocity * FRAME_DURATION;
+    const velocityPerTick = this.birdVelocity;
     this.bird.rotation = Math.max(-0.6, Math.min(0.6, velocityPerTick * 0.03));
     this.bird.setWing(velocityPerTick > 0);
 
@@ -623,13 +625,13 @@ class Game {
   }
 
   private updateParallax(): void {
-    this.cloudLayer.x = -200 + this.scrollDistance * 0.9;
+    this.cloudLayer.tilePosition.x = -this.scrollDistance * 0.9;
 
     for (const layer of this.distantGround) {
-      layer.layer.x = -200 + this.scrollDistance * layer.shift;
+      layer.layer.tilePosition.x = -this.scrollDistance * layer.shift;
     }
 
-    this.frontGround.x = -200 - this.scrollDistance * 0.1;
+    this.frontGround.tilePosition.x = this.scrollDistance * 0.1;
 
     const loopDistance = PIPE_SPACING * TREE_COUNT;
     for (const tree of this.trees) {
