@@ -9,4 +9,4 @@
 hs_err_pid*
 
 web-pixi/dist/
-# eclipse preferences
+web-pixi/node_modules/
