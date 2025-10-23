@@ -85,14 +85,13 @@ function createTexture(renderer: Renderer, draw: (graphics: Graphics) => void): 
 
 function createCloudTexture(renderer: Renderer): Texture {
   return createTexture(renderer, (g) => {
-    g.lineStyle({ width: 4, color: 0x000000, alignment: 0.5 });
-    g.beginFill(0xffffff);
-    g.drawRoundedRect(0, 36, 240, 48, 24);
-    g.drawEllipse(45, 32, 45, 30);
-    g.drawEllipse(110, 24, 55, 34);
-    g.drawEllipse(170, 34, 50, 28);
-    g.drawEllipse(210, 30, 38, 24);
-    g.endFill();
+    g.setStrokeStyle({ width: 4, color: 0x000000, alignment: 0.5 })
+      .roundRect(0, 36, 240, 48, 24)
+      .ellipse(45, 32, 45, 30)
+      .ellipse(110, 24, 55, 34)
+      .ellipse(170, 34, 50, 28)
+      .ellipse(210, 30, 38, 24)
+      .fill(0xffffff);
   });
 }
 
@@ -105,28 +104,25 @@ function createGroundTexture(renderer: Renderer): Texture {
     const stripeColors = [0x3fbf3f, 0x33a833, 0x46c146];
 
     // Ground base
-    g.lineStyle({ width: 4, color: 0x000000 });
-    g.beginFill(0x7a401c);
-    g.drawRect(0, grassHeight, width, dirtHeight);
-    g.endFill();
+    g.setStrokeStyle({ width: 4, color: 0x000000 })
+      .rect(0, grassHeight, width, dirtHeight)
+      .fill(0x7a401c);
 
     // Grass top
-    g.lineStyle({ width: 4, color: 0x000000 });
-    g.beginFill(0x3ab049);
-    g.drawRect(0, 0, width, grassHeight);
-    g.endFill();
+    g.setStrokeStyle({ width: 4, color: 0x000000 })
+      .rect(0, 0, width, grassHeight)
+      .fill(0x3ab049);
 
     // Grass color variation
-    g.lineStyle({ width: 0 });
+    g.setStrokeStyle({ width: 0 });
     for (let x = 0; x < width; x += stripeWidth) {
       const color = stripeColors[(x / stripeWidth) % stripeColors.length];
-      g.beginFill(color);
-      g.drawRect(x, 0, stripeWidth, grassHeight);
-      g.endFill();
+      g.rect(x, 0, stripeWidth, grassHeight)
+        .fill(color);
     }
 
     // Outline between grass and dirt
-    g.lineStyle({ width: 3, color: 0x000000, alignment: 0.5 });
+    g.setStrokeStyle({ width: 3, color: 0x000000, alignment: 0.5 });
     g.moveTo(0, grassHeight);
     g.lineTo(width, grassHeight);
   });
@@ -142,10 +138,9 @@ class Bird extends Container {
     super();
 
     this.body = new Graphics();
-    this.body.lineStyle({ width: 4, color: 0x000000, alignment: 0.5 });
-    this.body.beginFill(0xff2d2d);
-    this.body.drawRoundedRect(-BIRD_WIDTH / 2, -BIRD_HEIGHT / 2, BIRD_WIDTH, BIRD_HEIGHT, 16);
-    this.body.endFill();
+    this.body.setStrokeStyle({ width: 4, color: 0x000000, alignment: 0.5 })
+      .roundRect(-BIRD_WIDTH / 2, -BIRD_HEIGHT / 2, BIRD_WIDTH, BIRD_HEIGHT, 16)
+      .fill(0xff2d2d);
 
     this.wing = new Graphics();
     this.drawWing(false);
@@ -163,26 +158,24 @@ class Bird extends Container {
 
   private drawBeak(): void {
     this.beak.clear();
-    this.beak.lineStyle({ width: 3, color: 0x000000 });
-    this.beak.beginFill(0xffd93b);
-    this.beak.moveTo(BIRD_WIDTH / 2, -6);
-    this.beak.lineTo(BIRD_WIDTH / 2 + 15, 0);
-    this.beak.lineTo(BIRD_WIDTH / 2, 6);
-    this.beak.closePath();
-    this.beak.endFill();
+    this.beak.setStrokeStyle({ width: 3, color: 0x000000 })
+      .moveTo(BIRD_WIDTH / 2, -6)
+      .lineTo(BIRD_WIDTH / 2 + 15, 0)
+      .lineTo(BIRD_WIDTH / 2, 6)
+      .closePath()
+      .fill(0xffd93b);
   }
 
   private drawWing(descending: boolean): void {
     const topY = descending ? -10 : 10;
     const bottomY = descending ? 2 : -2;
     this.wing.clear();
-    this.wing.lineStyle({ width: 3, color: 0x000000 });
-    this.wing.beginFill(0xff5555, 0.4);
-    this.wing.moveTo(-10, bottomY);
-    this.wing.lineTo(0, topY);
-    this.wing.lineTo(10, bottomY);
-    this.wing.closePath();
-    this.wing.endFill();
+    this.wing.setStrokeStyle({ width: 3, color: 0x000000 })
+      .moveTo(-10, bottomY)
+      .lineTo(0, topY)
+      .lineTo(10, bottomY)
+      .closePath()
+      .fill(0xff5555, 0.4);
   }
 
   public setWing(descending: boolean): void {
@@ -223,8 +216,10 @@ class PipePair {
       fontFamily: 'Arial Black, sans-serif',
       fontSize: 40,
       fill: 0xffffff,
-      stroke: 0x000000,
-      strokeThickness: 8,
+      stroke: {
+        color: 0x000000,
+        width: 8,
+      },
       align: 'left',
     });
     this.questionText.anchor.set(0, 0.5);
@@ -246,21 +241,14 @@ class PipePair {
 
   private drawPipeGraphics(graphics: Graphics, height: number): void {
     graphics.clear();
-    graphics.lineStyle({ width: 4, color: 0x000000 });
-    graphics.beginFill(0x00a900);
-    graphics.drawRect(0, 0, PIPE_WIDTH, height);
-    graphics.endFill();
-
-    graphics.lineStyle({ width: 4, color: 0x000000 });
-    graphics.beginFill(0x00c000);
-    graphics.drawRoundedRect(-5, 0, PIPE_WIDTH + 10, 20, 8);
-    graphics.endFill();
-
-    graphics.lineStyle({ width: 4, color: 0x000000 });
-    graphics.beginFill(0x00c000);
-    graphics.drawRoundedRect(-5, height - 20, PIPE_WIDTH + 10, 20, 8);
-    graphics.endFill();
-    graphics.cacheAsBitmap = true;
+    graphics.setStrokeStyle({ width: 4, color: 0x000000 });
+    graphics.rect(0, 0, PIPE_WIDTH, height)
+      .fill(0x00a900);
+    graphics.roundRect(-5, 0, PIPE_WIDTH + 10, 20, 8)
+      .fill(0x00c000);
+    graphics.roundRect(-5, height - 20, PIPE_WIDTH + 10, 20, 8)
+      .fill(0x00c000);
+    graphics.cacheAsTexture(true);
   }
 
   public setX(x: number): void {
@@ -381,23 +369,29 @@ class Game {
     fontFamily: 'Arial Black, sans-serif',
     fontSize: 96,
     fill: 0xffffff,
-    stroke: 0x000000,
-    strokeThickness: 10,
+    stroke: {
+      color: 0x000000,
+      width: 10,
+    },
     align: 'center',
   });
   private readonly fpsText: Text = new Text('FPS: 0', {
     fontFamily: 'Arial Black, sans-serif',
     fontSize: 32,
     fill: 0xffffff,
-    stroke: 0x000000,
-    strokeThickness: 6,
+    stroke: {
+      color: 0x000000,
+      width: 6,
+    },
   });
   private readonly titleText: Text = new Text('Flappy Nerd', {
     fontFamily: 'Arial Black, sans-serif',
     fontSize: 120,
     fill: 0xffffff,
-    stroke: 0x000000,
-    strokeThickness: 14,
+    stroke: {
+      color: 0x000000,
+      width: 14,
+    },
     align: 'center',
   });
   private readonly background: Sprite;
@@ -496,10 +490,9 @@ class Game {
     const container = new Container();
 
     const trunk = new Graphics();
-    trunk.lineStyle({ width: 4, color: 0x000000 });
-    trunk.beginFill(0x653300);
-    trunk.drawRect(-15, 10, 30, 700);
-    trunk.endFill();
+    trunk.setStrokeStyle({ width: 4, color: 0x000000 });
+    trunk.rect(-15, 10, 30, 700)
+      .fill(0x653300);
     container.addChild(trunk);
 
     const outlineColor = 0x000000;
@@ -514,14 +507,13 @@ class Game {
     ];
     for (const circle of circles) {
       const leaf = new Graphics();
-      leaf.lineStyle({ width: 3, color: outlineColor });
-      leaf.beginFill(leafColor);
-      leaf.drawEllipse(circle.x, circle.y, 35, 35);
-      leaf.endFill();
+      leaf.setStrokeStyle({ width: 3, color: outlineColor });
+      leaf.ellipse(circle.x, circle.y, 35, 35)
+        .fill(leafColor);
       container.addChild(leaf);
     }
 
-    container.cacheAsBitmap = true;
+    container.cacheAsTexture(true);
     return { sprite: container, height };
   }
 
@@ -743,8 +735,8 @@ class Game {
 
     if (debugEnabled) {
       this.debugGraphics.clear();
-      this.debugGraphics.lineStyle({ width: 2, color: 0xff0000, alpha: 0.8 });
-      this.debugGraphics.drawRect(
+      this.debugGraphics.setStrokeStyle({ width: 2, color: 0xff0000, alpha: 0.8 });
+      this.debugGraphics.rect(
         this.birdWorldX - BIRD_WIDTH / 2,
         this.birdY - BIRD_HEIGHT / 2,
         BIRD_WIDTH,
@@ -757,16 +749,16 @@ class Game {
         const wrong = pipe.getWrongBounds();
         const right = pipe.getRightBounds();
 
-        this.debugGraphics.lineStyle({ width: 2, color: 0x0000ff, alpha: 0.7 });
-        this.debugGraphics.drawRect(top.x, top.y, top.width, top.height);
-        this.debugGraphics.drawRect(bottom.x, bottom.y, bottom.width, bottom.height);
-        this.debugGraphics.drawRect(middle.x, middle.y, middle.width, middle.height);
+        this.debugGraphics.setStrokeStyle({ width: 2, color: 0x0000ff, alpha: 0.7 });
+        this.debugGraphics.rect(top.x, top.y, top.width, top.height);
+        this.debugGraphics.rect(bottom.x, bottom.y, bottom.width, bottom.height);
+        this.debugGraphics.rect(middle.x, middle.y, middle.width, middle.height);
 
-        this.debugGraphics.lineStyle({ width: 2, color: 0xff0000, alpha: 0.5 });
-        this.debugGraphics.drawRect(wrong.x, wrong.y, wrong.width, wrong.height);
+        this.debugGraphics.setStrokeStyle({ width: 2, color: 0xff0000, alpha: 0.5 });
+        this.debugGraphics.rect(wrong.x, wrong.y, wrong.width, wrong.height);
 
-        this.debugGraphics.lineStyle({ width: 2, color: 0x00ff00, alpha: 0.5 });
-        this.debugGraphics.drawRect(right.x, right.y, right.width, right.height);
+        this.debugGraphics.setStrokeStyle({ width: 2, color: 0x00ff00, alpha: 0.5 });
+        this.debugGraphics.rect(right.x, right.y, right.width, right.height);
       }
     }
   }
