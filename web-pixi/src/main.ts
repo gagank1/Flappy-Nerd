@@ -23,6 +23,11 @@ const PIPE_TOP_Y = -500;
 const PIPE_TOP_HEIGHT = 635;
 const PIPE_BOTTOM_Y = 595;
 const PIPE_BOTTOM_HEIGHT = 1000;
+const PIPE_MIDDLE_Y = 315;
+const PIPE_MIDDLE_HEIGHT = 100;
+const PIPE_ANSWER_ZONE_HEIGHT = 180;
+const PIPE_TOP_ANSWER_Y = 135;
+const PIPE_BOTTOM_ANSWER_Y = 415;
 const PIPE_SHIFT_RANGE = 50;
 const FIRST_PIPE_X = 1500;
 
@@ -48,6 +53,13 @@ interface RectBounds {
   y: number;
   width: number;
   height: number;
+}
+
+interface PipeQuestion {
+  prompt: string;
+  correctAnswer: string;
+  wrongAnswer: string;
+  correctIsBottom: boolean;
 }
 
 function intersects(a: RectBounds, b: RectBounds): boolean {
@@ -164,15 +176,55 @@ class Bird extends Container {
 class PipePair {
   public readonly container: Container = new Container();
   private readonly top: Graphics = new Graphics();
+  private readonly middle: Graphics = new Graphics();
   private readonly bottom: Graphics = new Graphics();
+  private readonly answerTopText: Text;
+  private readonly answerBottomText: Text;
+  private readonly questionText: Text;
   public shift = 0;
   private baseX = 0;
+  private correctIsBottom = true;
+  private wrongBounds: RectBounds = { x: 0, y: 0, width: PIPE_WIDTH, height: PIPE_ANSWER_ZONE_HEIGHT };
+  private rightBounds: RectBounds = { x: 0, y: 0, width: PIPE_WIDTH, height: PIPE_ANSWER_ZONE_HEIGHT };
 
   constructor() {
-    this.container.addChild(this.top, this.bottom);
+    const answerStyle = {
+      fontFamily: 'Arial Black, sans-serif',
+      fontSize: 40,
+      fill: 0xffffff,
+      stroke: 0x000000,
+      strokeThickness: 8,
+      align: 'left' as const,
+    };
+
+    this.answerTopText = new Text('', answerStyle);
+    this.answerBottomText = new Text('', answerStyle);
+    this.answerTopText.anchor.set(0, 0.5);
+    this.answerBottomText.anchor.set(0, 0.5);
+
+    this.questionText = new Text('', {
+      fontFamily: 'Arial Black, sans-serif',
+      fontSize: 40,
+      fill: 0xffffff,
+      stroke: 0x000000,
+      strokeThickness: 8,
+      align: 'left',
+    });
+    this.questionText.anchor.set(0, 0.5);
+
+    this.container.addChild(
+      this.top,
+      this.middle,
+      this.bottom,
+      this.answerTopText,
+      this.answerBottomText,
+      this.questionText,
+    );
     this.drawPipeGraphics(this.top, PIPE_TOP_HEIGHT);
+    this.drawPipeGraphics(this.middle, PIPE_MIDDLE_HEIGHT);
     this.drawPipeGraphics(this.bottom, PIPE_BOTTOM_HEIGHT);
     this.applyShift(0);
+    this.updateAnswerLayout();
   }
 
   private drawPipeGraphics(graphics: Graphics, height: number): void {
@@ -197,12 +249,26 @@ class PipePair {
   public setX(x: number): void {
     this.baseX = x;
     this.container.x = x;
+    this.updateAnswerLayout();
   }
 
   public applyShift(shift: number): void {
     this.shift = shift;
     this.top.y = PIPE_TOP_Y + shift;
+    this.middle.y = PIPE_MIDDLE_Y + shift;
     this.bottom.y = PIPE_BOTTOM_Y + shift;
+    this.updateAnswerLayout();
+  }
+
+  public setQuestion(question: PipeQuestion): void {
+    this.correctIsBottom = question.correctIsBottom;
+    const topAnswer = this.correctIsBottom ? question.wrongAnswer : question.correctAnswer;
+    const bottomAnswer = this.correctIsBottom ? question.correctAnswer : question.wrongAnswer;
+
+    this.answerTopText.text = topAnswer;
+    this.answerBottomText.text = bottomAnswer;
+    this.questionText.text = question.prompt;
+    this.updateAnswerLayout();
   }
 
   public getTopBounds(): RectBounds {
@@ -223,8 +289,58 @@ class PipePair {
     };
   }
 
+  public getMiddleBounds(): RectBounds {
+    return {
+      x: this.baseX,
+      y: this.middle.y,
+      width: PIPE_WIDTH,
+      height: PIPE_MIDDLE_HEIGHT,
+    };
+  }
+
+  public getWrongBounds(): RectBounds {
+    return this.wrongBounds;
+  }
+
+  public getRightBounds(): RectBounds {
+    return this.rightBounds;
+  }
+
   public getWorldX(): number {
     return this.baseX;
+  }
+
+  private updateAnswerLayout(): void {
+    const topZoneY = PIPE_TOP_ANSWER_Y + this.shift;
+    const bottomZoneY = PIPE_BOTTOM_ANSWER_Y + this.shift;
+    const topCenterY = topZoneY + PIPE_ANSWER_ZONE_HEIGHT / 2;
+    const bottomCenterY = bottomZoneY + PIPE_ANSWER_ZONE_HEIGHT / 2;
+
+    const answerOffsetX = 4;
+    this.answerTopText.position.set(answerOffsetX, topCenterY);
+    this.answerBottomText.position.set(answerOffsetX, bottomCenterY);
+    this.questionText.position.set(answerOffsetX, 720);
+
+    const topBounds: RectBounds = {
+      x: this.baseX,
+      y: topZoneY,
+      width: PIPE_WIDTH,
+      height: PIPE_ANSWER_ZONE_HEIGHT,
+    };
+    const bottomBounds: RectBounds = {
+      x: this.baseX,
+      y: bottomZoneY,
+      width: PIPE_WIDTH,
+      height: PIPE_ANSWER_ZONE_HEIGHT,
+    };
+
+    if (this.correctIsBottom) {
+      this.rightBounds = bottomBounds;
+      this.wrongBounds = topBounds;
+    } else {
+      this.rightBounds = topBounds;
+      this.wrongBounds = bottomBounds;
+    }
   }
 }
 
@@ -416,6 +532,7 @@ class Game {
     for (let i = 0; i < pipeCount; i += 1) {
       const pipe = new PipePair();
       this.pipeContainer.addChild(pipe.container);
+      pipe.setQuestion(this.generateQuestion());
       this.pipes.push(pipe);
     }
   }
@@ -425,6 +542,7 @@ class Game {
       const shift = Math.round(Math.random() * PIPE_SHIFT_RANGE * 2) - PIPE_SHIFT_RANGE;
       pipe.applyShift(shift);
       pipe.setX(x);
+      pipe.setQuestion(this.generateQuestion());
       // reset pipe state
       x += PIPE_SPACING;
     }
@@ -546,6 +664,7 @@ class Game {
       const shift = Math.round(Math.random() * PIPE_SHIFT_RANGE * 2) - PIPE_SHIFT_RANGE;
       first.applyShift(shift);
       first.setX(last.getWorldX() + PIPE_SPACING);
+      first.setQuestion(this.generateQuestion());
       this.pipes.push(this.pipes.shift()!);
     }
   }
@@ -576,12 +695,31 @@ class Game {
     for (const pipe of this.pipes) {
       if (
         intersects(birdBounds, pipe.getTopBounds()) ||
-        intersects(birdBounds, pipe.getBottomBounds())
+        intersects(birdBounds, pipe.getBottomBounds()) ||
+        intersects(birdBounds, pipe.getMiddleBounds()) ||
+        intersects(birdBounds, pipe.getWrongBounds())
       ) {
         this.kill();
         return;
       }
     }
+  }
+
+  private generateQuestion(): PipeQuestion {
+    const num1 = Math.floor(Math.random() * 9) + 1;
+    const num2 = Math.floor(Math.random() * 9) + 1;
+    const correct = num1 + num2;
+    let wrong = correct;
+    while (wrong === correct || wrong < 2 || wrong > 18) {
+      wrong = Math.floor(Math.random() * 17) + 2;
+    }
+    const correctIsBottom = Math.random() < 0.5;
+    return {
+      prompt: `${num1}+${num2}`,
+      correctAnswer: `${correct}`,
+      wrongAnswer: `${wrong}`,
+      correctIsBottom,
+    };
   }
 
   private kill(): void {
@@ -614,12 +752,23 @@ class Game {
         BIRD_WIDTH,
         BIRD_HEIGHT,
       );
-      this.debugGraphics.lineStyle({ width: 2, color: 0x0000ff, alpha: 0.7 });
       for (const pipe of this.pipes) {
         const top = pipe.getTopBounds();
+        const middle = pipe.getMiddleBounds();
         const bottom = pipe.getBottomBounds();
+        const wrong = pipe.getWrongBounds();
+        const right = pipe.getRightBounds();
+
+        this.debugGraphics.lineStyle({ width: 2, color: 0x0000ff, alpha: 0.7 });
         this.debugGraphics.drawRect(top.x, top.y, top.width, top.height);
         this.debugGraphics.drawRect(bottom.x, bottom.y, bottom.width, bottom.height);
+        this.debugGraphics.drawRect(middle.x, middle.y, middle.width, middle.height);
+
+        this.debugGraphics.lineStyle({ width: 2, color: 0xff0000, alpha: 0.5 });
+        this.debugGraphics.drawRect(wrong.x, wrong.y, wrong.width, wrong.height);
+
+        this.debugGraphics.lineStyle({ width: 2, color: 0x00ff00, alpha: 0.5 });
+        this.debugGraphics.drawRect(right.x, right.y, right.width, right.height);
       }
     }
   }
@@ -631,7 +780,7 @@ class Game {
       layer.layer.tilePosition.x = -this.scrollDistance * layer.shift;
     }
 
-    this.frontGround.tilePosition.x = this.scrollDistance * 0.1;
+    this.frontGround.tilePosition.x = -this.scrollDistance * 0.1;
 
     const loopDistance = PIPE_SPACING * TREE_COUNT;
     for (const tree of this.trees) {
