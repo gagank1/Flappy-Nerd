@@ -31,6 +31,10 @@ const PIPE_BOTTOM_ANSWER_Y = 415;
 const PIPE_SHIFT_RANGE = 50;
 const FIRST_PIPE_X = 1500;
 
+const CLOUD_BASE_Y = 40;
+const CLOUD_SCROLL_FACTOR = 0.3;
+const GROUND_BASE_X = -100;
+
 const BIRD_WIDTH = 40;
 const BIRD_HEIGHT = 30;
 const BIRD_X = 80;
@@ -83,10 +87,11 @@ function createCloudTexture(renderer: Renderer): Texture {
   return createTexture(renderer, (g) => {
     g.lineStyle({ width: 4, color: 0x000000, alignment: 0.5 });
     g.beginFill(0xffffff);
-    g.drawEllipse(45, 38, 45, 30);
-    g.drawEllipse(105, 28, 55, 35);
-    g.drawEllipse(165, 40, 50, 28);
-    g.drawEllipse(210, 34, 40, 24);
+    g.drawRoundedRect(0, 36, 240, 48, 24);
+    g.drawEllipse(45, 32, 45, 30);
+    g.drawEllipse(110, 24, 55, 34);
+    g.drawEllipse(170, 34, 50, 28);
+    g.drawEllipse(210, 30, 38, 24);
     g.endFill();
   });
 }
@@ -94,24 +99,36 @@ function createCloudTexture(renderer: Renderer): Texture {
 function createGroundTexture(renderer: Renderer): Texture {
   return createTexture(renderer, (g) => {
     const width = 240;
-    const topHeight = 21;
-    const baseHeight = 120;
+    const grassHeight = 36;
+    const dirtHeight = 120;
+    const stripeWidth = 24;
+    const stripeColors = [0x3fbf3f, 0x33a833, 0x46c146];
 
+    // Ground base
     g.lineStyle({ width: 4, color: 0x000000 });
-    g.beginFill(0x05be05);
-    g.drawRect(0, 0, width, topHeight);
+    g.beginFill(0x7a401c);
+    g.drawRect(0, grassHeight, width, dirtHeight);
     g.endFill();
 
-    g.lineStyle({ width: 2, color: 0x329600 });
-    for (let i = -20; i < width + 60; i += 80) {
-      g.moveTo(i + 2, topHeight + baseHeight);
-      g.lineTo(i - 18, topHeight);
+    // Grass top
+    g.lineStyle({ width: 4, color: 0x000000 });
+    g.beginFill(0x3ab049);
+    g.drawRect(0, 0, width, grassHeight);
+    g.endFill();
+
+    // Grass color variation
+    g.lineStyle({ width: 0 });
+    for (let x = 0; x < width; x += stripeWidth) {
+      const color = stripeColors[(x / stripeWidth) % stripeColors.length];
+      g.beginFill(color);
+      g.drawRect(x, 0, stripeWidth, grassHeight);
+      g.endFill();
     }
 
-    g.lineStyle({ width: 4, color: 0x000000 });
-    g.beginFill(0x653300);
-    g.drawRect(0, topHeight, width, baseHeight);
-    g.endFill();
+    // Outline between grass and dirt
+    g.lineStyle({ width: 3, color: 0x000000, alignment: 0.5 });
+    g.moveTo(0, grassHeight);
+    g.lineTo(width, grassHeight);
   });
 }
 
@@ -319,7 +336,7 @@ class PipePair {
     const answerOffsetX = 4;
     this.answerTopText.position.set(answerOffsetX, topCenterY);
     this.answerBottomText.position.set(answerOffsetX, bottomCenterY);
-    this.questionText.position.set(answerOffsetX, 720);
+    this.questionText.position.set(answerOffsetX, 690);
 
     const topBounds: RectBounds = {
       x: this.baseX,
@@ -383,9 +400,9 @@ class Game {
     strokeThickness: 14,
     align: 'center',
   });
+  private readonly background: Sprite;
   private readonly debugGraphics: Graphics = new Graphics();
   private readonly cloudLayer: TilingSprite;
-  private readonly distantGround: { layer: TilingSprite; shift: number }[] = [];
   private readonly frontGround: TilingSprite;
   private readonly treeContainer: Container = new Container();
   private readonly trees: TreeInstance[] = [];
@@ -411,20 +428,19 @@ class Game {
     this.world.addChild(this.playfield);
     this.playfield.sortableChildren = true;
 
-    const background = new Sprite(Texture.WHITE);
-    background.tint = 0x5efeee;
-    background.width = LOGICAL_WIDTH;
-    background.height = LOGICAL_HEIGHT;
-    background.position.set(0, 0);
-    this.playfield.addChild(background);
+    this.background = new Sprite(Texture.WHITE);
+    this.background.tint = 0x5efeee;
+    this.background.width = LOGICAL_WIDTH;
+    this.background.height = LOGICAL_HEIGHT;
+    this.background.position.set(0, 0);
+    this.playfield.addChild(this.background);
 
     this.cloudLayer = new TilingSprite(createCloudTexture(renderer), LOGICAL_WIDTH + 400, 90);
-    this.cloudLayer.position.set(0, -45);
+    this.cloudLayer.position.set(0, CLOUD_BASE_Y);
     this.playfield.addChild(this.cloudLayer);
 
     const groundTexture = createGroundTexture(renderer);
 
-    this.createGroundLayers(groundTexture);
     this.playfield.addChild(this.treeContainer);
     this.createTrees();
 
@@ -437,8 +453,7 @@ class Game {
 
     this.frontGround = new TilingSprite(groundTexture, LOGICAL_WIDTH + 400, groundTexture.height);
     this.frontGround.y = 730;
-    this.frontGround.x = -100;
-    this.frontGround.alpha = 0.95;
+    this.frontGround.x = GROUND_BASE_X;
     this.playfield.addChild(this.frontGround);
 
     this.idleBirds.addChild(this.homeBird, this.homeBirdGhost);
@@ -465,23 +480,6 @@ class Game {
     this.reset();
   }
 
-  private createGroundLayers(texture: Texture): void {
-    const layerConfig = [
-      { shift: 0.4, offsetY: 30, alpha: 0.7 },
-      { shift: 0.3, offsetY: 20, alpha: 0.8 },
-      { shift: 0.2, offsetY: 10, alpha: 0.9 },
-    ];
-
-    for (const config of layerConfig) {
-      const layer = new TilingSprite(texture, LOGICAL_WIDTH + 800, texture.height);
-      layer.x = -100;
-      layer.y = 720 - config.offsetY;
-      layer.alpha = config.alpha;
-      this.distantGround.push({ layer, shift: config.shift });
-      this.playfield.addChild(layer);
-    }
-  }
-
   private createTrees(): void {
     for (let i = 0; i < TREE_COUNT; i += 1) {
       const tree = this.buildTree();
@@ -500,7 +498,7 @@ class Game {
     const trunk = new Graphics();
     trunk.lineStyle({ width: 4, color: 0x000000 });
     trunk.beginFill(0x653300);
-    trunk.drawRect(20, 10, 30, 700);
+    trunk.drawRect(-15, 10, 30, 700);
     trunk.endFill();
     container.addChild(trunk);
 
@@ -509,10 +507,10 @@ class Game {
     const circles = [
       { x: 0, y: 0 },
       { x: 0, y: 25 },
-      { x: 20, y: 15 },
-      { x: -20, y: 15 },
-      { x: -30, y: 25 },
-      { x: 30, y: 25 },
+      { x: 28, y: 15 },
+      { x: -28, y: 15 },
+      { x: -38, y: 25 },
+      { x: 38, y: 25 },
     ];
     for (const circle of circles) {
       const leaf = new Graphics();
@@ -774,24 +772,25 @@ class Game {
   }
 
   private updateParallax(): void {
-    this.cloudLayer.tilePosition.x = -this.scrollDistance * 0.9;
+    const scroll = this.scrollDistance;
+    this.background.x = scroll;
 
-    for (const layer of this.distantGround) {
-      layer.layer.tilePosition.x = -this.scrollDistance * layer.shift;
-    }
+    this.cloudLayer.x = scroll;
+    this.cloudLayer.tilePosition.x = -scroll * CLOUD_SCROLL_FACTOR;
 
-    this.frontGround.tilePosition.x = -this.scrollDistance * 0.1;
+    this.frontGround.x = scroll + GROUND_BASE_X;
+    this.frontGround.tilePosition.x = -scroll;
 
     const loopDistance = PIPE_SPACING * TREE_COUNT;
     for (const tree of this.trees) {
-      let worldX = tree.baseX + this.scrollDistance * 0.2;
-      let screenX = worldX - this.scrollDistance;
+      let worldX = tree.baseX + scroll * 0.2;
+      let screenX = worldX - scroll;
       while (screenX < -250) {
         tree.baseX += loopDistance;
         tree.height = 300 + Math.random() * 300;
         tree.sprite.y = tree.height;
-        worldX = tree.baseX + this.scrollDistance * 0.2;
-        screenX = worldX - this.scrollDistance;
+        worldX = tree.baseX + scroll * 0.2;
+        screenX = worldX - scroll;
       }
       tree.sprite.x = worldX;
     }
