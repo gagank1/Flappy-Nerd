@@ -12,7 +12,8 @@ import {
 const LOGICAL_WIDTH = 1200;
 const LOGICAL_HEIGHT = 800;
 
-const FRAME_DURATION = 12 / 1000; // Original Swing timer tick (12 ms)
+const ORIGINAL_FRAME_DURATION = 12 / 1000; // Original Swing timer tick (12 ms)
+const ORIGINAL_TICKS_PER_SECOND = 1 / ORIGINAL_FRAME_DURATION;
 
 const GRAVITY_PER_TICK = 0.9;
 const FLAP_IMPULSE = -15;
@@ -46,7 +47,6 @@ const HOME_BIRD_VERTICAL_SPEED_PER_TICK = 6;
 const TREE_COUNT = 20;
 
 const MAX_FRAME_DELTA = 0.1;
-const FIXED_STEP = FRAME_DURATION;
 
 const searchParams = new URLSearchParams(window.location.search);
 const debugEnabled = searchParams.get('debug') === '1';
@@ -594,8 +594,8 @@ class Game {
     }
   }
 
-  public updateFixed(dt: number): void {
-    const step = dt / FRAME_DURATION;
+  public update(dt: number): void {
+    const step = dt * ORIGINAL_TICKS_PER_SECOND;
 
     if (!this.started) {
       this.updateIdleBirds(step);
@@ -607,7 +607,7 @@ class Game {
     this.birdY += this.birdVelocity * step;
 
     if (this.alive) {
-      this.framesPassed += 1;
+      this.framesPassed += step;
       this.birdWorldX += PIPE_SPEED_PER_TICK * step;
     }
 
@@ -854,7 +854,6 @@ async function bootstrap(): Promise<void> {
     autoDensity: true,
     resizeTo: container,
   });
-  app.ticker.stop();
 
   const world = new Container();
   world.sortableChildren = true;
@@ -882,34 +881,17 @@ async function bootstrap(): Promise<void> {
   resize();
   window.addEventListener('resize', resize);
 
-  let lastTime = performance.now();
-  let accumulator = 0;
+  if (uncappedRender) {
+    app.ticker.maxFPS = 0;
+  }
 
-  const scheduleFrame = (cb: FrameRequestCallback) => {
-    if (uncappedRender) {
-      return window.setTimeout(() => cb(performance.now()), 0);
-    }
-    return window.requestAnimationFrame(cb);
-  };
-
-  const loop: FrameRequestCallback = (now) => {
-    const deltaSeconds = Math.min((now - lastTime) / 1000, MAX_FRAME_DELTA);
-    lastTime = now;
-    accumulator += deltaSeconds;
-
-    while (accumulator >= FIXED_STEP) {
-      game.updateFixed(FIXED_STEP);
-      accumulator -= FIXED_STEP;
-    }
-
+  app.ticker.add((ticker) => {
+    const rawDeltaSeconds = ticker.elapsedMS / 1000;
+    const dt = Math.min(rawDeltaSeconds, MAX_FRAME_DELTA);
+    game.update(dt);
     game.syncSprites();
-    game.updateFpsCounter(deltaSeconds);
-    app.render();
-
-    scheduleFrame(loop);
-  };
-
-  scheduleFrame(loop);
+    game.updateFpsCounter(rawDeltaSeconds);
+  });
 }
 
 bootstrap();
