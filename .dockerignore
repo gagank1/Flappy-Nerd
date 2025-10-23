@@ -1,0 +1,7 @@
+*.class
+*.jar
+*.war
+*.ear
+bin/
+web-pixi/dist/
+web-pixi/node_modules/
